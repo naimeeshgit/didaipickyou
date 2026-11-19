@@ -132,6 +132,7 @@ export function ScanFlow() {
     }
   }
 
+  const usedTools = TOOLS.filter((t) => jobs.some((j) => j.tool === t.id));
   const values = Object.values(states);
   const doneCount = values.filter((v) => v === "picked" || v === "missed" || v === "failed").length;
   const picked = values.filter((v) => v === "picked").length;
@@ -264,14 +265,14 @@ export function ScanFlow() {
               <thead>
                 <tr className="text-xs text-muted">
                   <th className="text-left font-normal pb-2">Question</th>
-                  {TOOLS.map((t) => <th key={t.id} className="font-normal pb-2 px-2">{t.label}</th>)}
+                  {usedTools.map((t) => <th key={t.id} className="font-normal pb-2 px-2">{t.label}</th>)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {questions.map((q, i) => (
                   <tr key={i}>
                     <td className="py-2 pr-4 max-w-md truncate">{q.text}</td>
-                    {TOOLS.map((t) => (
+                    {usedTools.map((t) => (
                       <td key={t.id} className="px-2">
                         <div className="flex justify-center gap-1">
                           {Array.from({ length: runs }, (_, r) => {

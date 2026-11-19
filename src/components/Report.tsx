@@ -1,4 +1,4 @@
-import { TOOLS, type ToolId } from "@/lib/config";
+import { TOOLS, toolNames, type ToolId } from "@/lib/config";
 import type { Report } from "@/lib/types";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -36,6 +36,7 @@ export function ReportView({ report }: { report: Report }) {
   const rank = report.scores.findIndex((s) => s.isTarget) + 1;
   const leader = report.scores[0];
   const answered = report.totalAnswers - report.failedAnswers;
+  const asked = toolNames(report.byTool.map((t) => t.tool));
   const date = new Date(report.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
   return (
@@ -55,11 +56,11 @@ export function ReportView({ report }: { report: Report }) {
           </h1>
           <p className="mt-4 text-paper/80 max-w-xl">
             {target.pickRate >= leader.pickRate && target.isTarget
-              ? `Yes, more often than any competitor. ChatGPT, Claude and Gemini named ${report.brand.name} in ${pct(target.pickRate)} of ${answered} answers.`
-              : `Sometimes. ChatGPT, Claude and Gemini named ${report.brand.name} in ${pct(target.pickRate)} of ${answered} answers. ${leader.name} was named most, in ${pct(leader.pickRate)}.`}
+              ? `Yes, more often than any competitor. ${asked} named ${report.brand.name} in ${pct(target.pickRate)} of ${answered} answers.`
+              : `Sometimes. ${asked} named ${report.brand.name} in ${pct(target.pickRate)} of ${answered} answers. ${leader.name} was named most, in ${pct(leader.pickRate)}.`}
           </p>
           <p className="mt-3 text-xs text-paper/50">
-            {report.domain} · {date} · {report.questions.length} buyer questions × 3 assistants × {report.runs} runs
+            {report.domain} · {date} · {report.questions.length} buyer questions × {report.byTool.length} assistants × {report.runs} wordings
             {report.failedAnswers > 0 ? ` · ${report.failedAnswers} answers failed and are left out` : ""}
           </p>
         </div>
@@ -94,7 +95,7 @@ export function ReportView({ report }: { report: Report }) {
         </Section>
 
         <Section title="By assistant and question type" note={`How often each one named ${report.brand.name}.`}>
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${report.byTool.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
             {report.byTool.map((t) => (
               <div key={t.tool} className="rounded-xl border border-line p-4 text-center">
                 <div className="text-2xl font-semibold tabular">{pct(t.pickRate)}</div>
@@ -112,7 +113,7 @@ export function ReportView({ report }: { report: Report }) {
             ))}
           </div>
           <div className="mt-5 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-accent-soft px-3 py-1">Runs agree {pct(report.consistency)} of the time</span>
+            <span className="rounded-full bg-accent-soft px-3 py-1">Same result when reworded: {pct(report.consistency)}</span>
             <span className="rounded-full bg-pick-soft px-3 py-1">Positive mentions: {report.sentiment.positive}</span>
             <span className="rounded-full bg-line/60 px-3 py-1">Neutral: {report.sentiment.neutral}</span>
             <span className="rounded-full bg-miss-soft px-3 py-1">Negative: {report.sentiment.negative}</span>
@@ -226,8 +227,9 @@ export function ReportView({ report }: { report: Report }) {
                   {list.map((a) => (
                     <div key={`${a.tool}-${a.run}`} className="rounded-xl border border-line p-3 text-xs">
                       <p className="font-semibold">
-                        {toolLabel(a.tool)} · run {a.run + 1}
+                        {toolLabel(a.tool)} · wording {a.run + 1}
                       </p>
+                      {a.asked && a.run > 0 && <p className="mt-1 italic text-muted">&ldquo;{a.asked}&rdquo;</p>}
                       <p className="text-muted mt-1">
                         {a.hits.length ? a.hits.map((h) => `${h.position}. ${h.name}`).join("  ") : "No tracked brands named"}
                       </p>

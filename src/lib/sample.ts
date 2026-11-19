@@ -71,6 +71,8 @@ const SAMPLE_SOURCES: Source[] = [
 
 const bias: Record<ToolId, number> = { chatgpt: 0.55, claude: 0.4, gemini: 0.3 };
 
+export const sampleVariants = (text: string) => [`what would you suggest: ${text}`, `${text}? need a quick answer`];
+
 export function sampleAnswer(q: number, tool: ToolId, run: number, question: string) {
   const r = rng(`${q}:${tool}:${run}`);
   const type = SAMPLE_DESIGN.questions[q]?.type ?? "category";

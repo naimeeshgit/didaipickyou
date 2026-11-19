@@ -1,3 +1,4 @@
+import { activeTools, toolNames } from "@/lib/config";
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
@@ -8,7 +9,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: { default: "Did AI Pick You? Free AI visibility check", template: "%s · Did AI Pick You?" },
   description:
-    "See whether ChatGPT, Claude and Gemini recommend your brand when buyers ask. Free AI visibility report with share of voice, competitor gaps, cited sources and fixes.",
+    `See whether ${toolNames(activeTools)} recommend your brand when buyers ask. Free AI visibility report with share of voice, competitor gaps, cited sources and fixes.`,
   openGraph: { type: "website", siteName: "Did AI Pick You?" },
 };
 
@@ -32,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-line mt-20">
           <div className="mx-auto max-w-6xl px-5 py-8 text-sm text-muted flex flex-wrap gap-4 justify-between">
             <span>Did AI Pick You? · Free AI visibility checks</span>
-            <span>Answers come from the ChatGPT, Claude and Gemini APIs and can differ from the consumer apps.</span>
+            <span>Answers come from the {toolNames(activeTools)} APIs and can differ from the consumer apps.</span>
           </div>
         </footer>
       </body>

@@ -1,3 +1,4 @@
+import { toolNames } from "@/lib/config";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const title = r.sample ? "Sample AI visibility report" : `Did AI pick ${r.brand.name}? AI visibility report`;
   return {
     title,
-    description: `ChatGPT, Claude and Gemini named ${r.brand.name} in ${Math.round(pick * 100)}% of answers to buyer questions about ${r.category}. See who AI recommends instead, the sources it cites and what to fix.`,
+    description: `${toolNames(r.byTool.map((t) => t.tool))} named ${r.brand.name} in ${Math.round(pick * 100)}% of answers to buyer questions about ${r.category}. See who AI recommends instead, the sources it cites and what to fix.`,
     robots: r.sample ? { index: false } : undefined,
     alternates: { canonical: `/r/${id}` },
   };

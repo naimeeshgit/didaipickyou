@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { analyseAnswer, askAssistant, designScan, writeFixes } from "./ai";
-import { allKeysSet, config, sampleMode, TOOLS, type ToolId } from "./config";
+import { analyseAnswer, askAssistant, designScan, rewordQuestions, writeFixes } from "./ai";
+import { activeTools, config, sampleMode, scanReady, TOOLS, type ToolId } from "./config";
 import { db, hash, isoWeek, newId } from "./db";
 import { detectBrands } from "./detect";
-import { SAMPLE_DESIGN, sampleAnswer } from "./sample";
+import { SAMPLE_DESIGN, sampleAnswer, sampleVariants } from "./sample";
 import { scoreScan, summaryForFixes } from "./score";
 import { domainOf, normaliseUrl, readSite } from "./site";
 import type { AnswerRecord, Brand, Design, Fix, Question, Report } from "./types";
@@ -21,15 +21,19 @@ export interface Scan {
   facts: string[];
   questions: Question[];
   runs: number;
-  models: Record<ToolId, string>;
+  /** Assistants asked in this scan. Older scans without it asked every tool. */
+  tools?: ToolId[];
+  models: Partial<Record<ToolId, string>>;
 }
+
+const scanTools = (scan: Scan): ToolId[] => scan.tools ?? TOOLS.map((t) => t.id);
 
 /* ---------- Step 1: design ---------- */
 
 export async function createDesign(input: { url: string; brand?: string; competitors?: string[] }): Promise<Design> {
   const url = normaliseUrl(input.url);
   const id = newId();
-  if (!sampleMode && !allKeysSet) throw new Error("Scanning isn't switched on yet. Please try again later.");
+  if (!sampleMode && !scanReady) throw new Error("Scanning isn't switched on yet. Please try again later.");
   if (sampleMode) {
     const design: Design = { id, url: url.toString(), domain: domainOf(url), ...SAMPLE_DESIGN };
     await db.putDoc("designs", id, design);
@@ -64,6 +68,20 @@ export const startSchema = z.object({
 export async function startScan(input: z.infer<typeof startSchema>): Promise<Scan> {
   const design = await db.getDoc<Design>("designs", input.designId);
   if (!design) throw new Error("That scan setup has expired. Please start again.");
+  const runs = config.runsPerQuestion;
+  const texts = input.questions.map((q) => q.text);
+  let variants: string[][];
+  if (design.sample) variants = texts.map(sampleVariants);
+  else {
+    // Reworded questions are cached, so re-running the same scan reuses the same wordings (and cached answers).
+    const vKey = `vars:${hash(`${texts.join("|")}|${runs}`)}`;
+    variants = (await db.cacheGet<string[][]>(vKey)) ?? [];
+    if (variants.length !== texts.length) {
+      variants = await rewordQuestions(texts, runs - 1).catch(() => texts.map(() => []));
+      await db.cacheSet(vKey, variants, 7 * 24 * 3600);
+    }
+  }
+  const tools = activeTools;
   const scan: Scan = {
     id: newId(),
     createdAt: new Date().toISOString(),
@@ -75,39 +93,41 @@ export async function startScan(input: z.infer<typeof startSchema>): Promise<Sca
     category: design.category,
     oneLiner: design.oneLiner,
     facts: design.facts,
-    questions: input.questions,
-    runs: config.runsPerQuestion,
-    models: design.sample
-      ? { chatgpt: "sample", claude: "sample", gemini: "sample" }
-      : config.answerModels,
+    questions: input.questions.map((q, i) => ({ ...q, variants: variants[i] ?? [] })),
+    runs,
+    tools,
+    models: Object.fromEntries(tools.map((t) => [t, design.sample ? "sample" : config.answerModels[t]])),
   };
   await db.putDoc("scans", scan.id, scan, { brand: scan.brand.name });
   return scan;
 }
 
 export const jobsFor = (scan: Scan) =>
-  scan.questions.flatMap((_, q) => TOOLS.flatMap((t) => Array.from({ length: scan.runs }, (_, run) => ({ q, tool: t.id, run }))));
+  scan.questions.flatMap((_, q) => scanTools(scan).flatMap((tool) => Array.from({ length: scan.runs }, (_, run) => ({ q, tool, run }))));
+
+/** Run 1 asks the original wording; later runs ask the reworded versions. */
+export const wordingFor = (question: Question, run: number) => (run === 0 ? question.text : question.variants?.[run - 1] ?? question.text);
 
 /* ---------- Step 3: one question, one assistant, one run ---------- */
 
 export async function runJob(scanId: string, q: number, tool: ToolId, run: number): Promise<AnswerRecord> {
   const scan = await db.getDoc<Scan>("scans", scanId);
   if (!scan) throw new Error("Scan not found.");
-  if (!scan.questions[q] || run < 0 || run >= scan.runs || !TOOLS.some((t) => t.id === tool)) {
+  if (!scan.questions[q] || run < 0 || run >= scan.runs || !scanTools(scan).includes(tool)) {
     throw new Error("That question isn't part of this scan.");
   }
   const answerId = `${scanId}:${q}:${tool}:${run}`;
   const existing = await db.getDoc<AnswerRecord>("answers", answerId);
   if (existing) return existing;
 
-  const question = scan.questions[q].text;
+  const question = wordingFor(scan.questions[q], run);
   const brands = [scan.brand, ...scan.competitors];
   let record: AnswerRecord;
 
   try {
     if (scan.sample) {
       const s = sampleAnswer(q, tool, run, question);
-      record = { q, tool, run, model: "sample", text: s.text, sources: s.sources, hits: detectBrands(s.text, brands), analysis: s.analysis };
+      record = { q, tool, run, asked: question, model: "sample", text: s.text, sources: s.sources, hits: detectBrands(s.text, brands), analysis: s.analysis };
     } else {
       // Answers are cached for the current week only, so each weekly scan gets fresh answers.
       const key = `ans:${hash(`${tool}|${scan.models[tool]}|${question}|${run}|${isoWeek()}`)}`;
@@ -126,12 +146,12 @@ export async function runJob(scanId: string, q: number, tool: ToolId, run: numbe
           : { targetSentiment: "not_mentioned", targetRecommended: false, topPick: hits[0]?.name ?? null, claims: [] };
         await db.cacheSet(aKey, analysis, 30 * 24 * 3600);
       }
-      record = { q, tool, run, model: answer.model, text: answer.text, sources: answer.sources, hits, analysis, cached };
+      record = { q, tool, run, asked: question, model: answer.model, text: answer.text, sources: answer.sources, hits, analysis, cached };
     }
   } catch (e) {
     console.error(`[ask] ${tool} q${q} run${run} failed:`, e);
     record = {
-      q, tool, run, model: scan.models[tool], text: "", sources: [], hits: [],
+      q, tool, run, asked: question, model: scan.models[tool] ?? "", text: "", sources: [], hits: [],
       analysis: { targetSentiment: "not_mentioned", targetRecommended: false, topPick: null, claims: [] },
       error: e instanceof Error ? e.message.slice(0, 200) : "Request failed",
     };
@@ -230,13 +250,15 @@ export function buildSampleReport(): Report {
     url: "https://quillnote.example", domain: "quillnote.example",
     brand: SAMPLE_DESIGN.brand, competitors: SAMPLE_DESIGN.competitors,
     category: SAMPLE_DESIGN.category, oneLiner: SAMPLE_DESIGN.oneLiner, facts: SAMPLE_DESIGN.facts,
-    questions: SAMPLE_DESIGN.questions, runs: 2,
-    models: { chatgpt: "sample", claude: "sample", gemini: "sample" },
+    questions: SAMPLE_DESIGN.questions.map((x) => ({ ...x, variants: sampleVariants(x.text) })), runs: 3,
+    tools: ["chatgpt", "claude"],
+    models: { chatgpt: "sample", claude: "sample" },
   };
   const brands = [scan.brand, ...scan.competitors];
   const answers: AnswerRecord[] = jobsFor(scan).map(({ q, tool, run }) => {
-    const s = sampleAnswer(q, tool, run, scan.questions[q].text);
-    return { q, tool, run, model: "sample", text: s.text, sources: s.sources, hits: detectBrands(s.text, brands), analysis: s.analysis };
+    const asked = wordingFor(scan.questions[q], run);
+    const s = sampleAnswer(q, tool, run, asked);
+    return { q, tool, run, asked, model: "sample", text: s.text, sources: s.sources, hits: detectBrands(s.text, brands), analysis: s.analysis };
   });
   const scored = scoreScan({
     scanId: "sample", createdAt: scan.createdAt, sample: true, url: scan.url, domain: scan.domain,

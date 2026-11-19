@@ -5,6 +5,8 @@ export type QuestionType = "category" | "problem" | "comparison" | "feature";
 export interface Question {
   text: string;
   type: QuestionType;
+  /** Reworded versions asked on runs 2, 3, ... (run 1 asks `text`). */
+  variants?: string[];
 }
 
 export interface Brand {
@@ -53,6 +55,8 @@ export interface AnswerRecord {
   sources: Source[];
   hits: BrandHit[];
   analysis: AnswerAnalysis;
+  /** The exact wording sent for this run. */
+  asked?: string;
   error?: string;
   cached?: boolean;
 }
@@ -84,7 +88,7 @@ export interface Report {
   oneLiner: string;
   competitors: Brand[];
   questions: Question[];
-  models: Record<ToolId, string>;
+  models: Partial<Record<ToolId, string>>;
   runs: number;
   totalAnswers: number;
   failedAnswers: number;

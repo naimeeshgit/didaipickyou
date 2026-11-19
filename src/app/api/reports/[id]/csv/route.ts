@@ -13,13 +13,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const label = (t: string) => TOOLS.find((x) => x.id === t)?.label ?? t;
   const rows: unknown[][] = [
-    ["question", "type", "assistant", "run", "model", `named_${r.brand.name}`, "position", "brands_named", "sentiment", "sources", "error", "answer"],
+    ["question", "type", "assistant", "wording", "asked_as", "model", `named_${r.brand.name}`, "position", "brands_named", "sentiment", "sources", "error", "answer"],
   ];
   for (const a of r.answers) {
     const q = r.questions[a.q];
     const mine = a.hits.find((h) => h.name === r.brand.name);
     rows.push([
-      q?.text, q?.type, label(a.tool), a.run + 1, a.model,
+      q?.text, q?.type, label(a.tool), a.run + 1, a.asked ?? q?.text, a.model,
       a.error ? "" : mine ? "yes" : "no", mine?.position ?? "",
       a.hits.map((h) => h.name).join("; "), a.analysis.targetSentiment,
       a.sources.map((s) => s.url).join(" "), a.error ?? "", a.text,

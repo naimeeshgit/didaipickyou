@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { UrlForm } from "@/components/UrlForm";
-import { config, sampleMode } from "@/lib/config";
+import { activeTools, config, sampleMode, toolNames } from "@/lib/config";
 import { db } from "@/lib/db";
 import type { Report } from "@/lib/types";
 
@@ -46,19 +46,19 @@ export default async function Home() {
   return (
     <div>
       <section className="mx-auto max-w-6xl px-5 pt-20 pb-14 text-center flex flex-col items-center">
-        <p className="rounded-full bg-accent-soft text-accent text-sm px-3 py-1">Free check across ChatGPT, Claude and Gemini</p>
+        <p className="rounded-full bg-accent-soft text-accent text-sm px-3 py-1">Free check across {toolNames(activeTools)}</p>
         <h1 className="mt-6 font-[family-name:var(--font-display)] text-5xl md:text-7xl tracking-tight leading-[1.05]">
           Did AI pick you?
         </h1>
         <p className="mt-6 max-w-2xl text-lg text-muted">
-          Buyers now ask AI assistants which product to choose. We ask ChatGPT, Claude and Gemini the questions your buyers ask,
+          Buyers now ask AI assistants which product to choose. We ask {toolNames(activeTools)} the questions your buyers ask,
           and show how often they recommend you, who they pick instead, and what to fix.
         </p>
         <div className="mt-8 w-full flex justify-center">
           <UrlForm large />
         </div>
         <p className="mt-3 text-xs text-muted">
-          {config.questionsPerScan} buyer questions · 3 assistants · {config.runsPerQuestion} runs each · about 2 minutes
+          {config.questionsPerScan} buyer questions · {activeTools.length} assistants · {config.runsPerQuestion} wordings each · about 2 minutes
           {sampleMode ? " · local test mode, made-up data" : ""}
         </p>
       </section>
@@ -72,7 +72,7 @@ export default async function Home() {
       <section className="mx-auto max-w-6xl px-5 mt-16 grid md:grid-cols-3 gap-5">
         {[
           { n: "1", t: "We read your website", d: "An AI model works out your category, your buyers and your real competitors, then writes the questions buyers ask. You can edit them." },
-          { n: "2", t: "We ask the assistants", d: "Each question goes to ChatGPT, Claude and Gemini with web search on, more than once, because AI answers change from run to run." },
+          { n: "2", t: "We ask the assistants", d: `Each question goes to ${toolNames(activeTools)} with web search on, ${config.runsPerQuestion} times in different words, the way different buyers would ask it.` },
           { n: "3", t: "You see who gets picked", d: "Your pick rate against competitors, the questions where you're missing, the sources AI cites, wrong facts about you, and a fix list." },
         ].map((s) => (
           <div key={s.n} className="rounded-2xl border border-line bg-white p-6">

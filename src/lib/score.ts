@@ -28,7 +28,7 @@ export function scoreScan(base: Base): Omit<Report, "fixes"> {
 
   const rate = (list: AnswerRecord[]) => (list.length ? list.filter((a) => named(a, target)).length / list.length : 0);
 
-  const byTool = TOOLS.map((t) => {
+  const byTool = TOOLS.filter((t) => base.answers.some((a) => a.tool === t.id)).map((t) => {
     const list = ok.filter((a) => a.tool === t.id);
     return { tool: t.id, pickRate: rate(list), answers: list.length };
   });

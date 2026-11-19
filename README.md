@@ -41,10 +41,13 @@ Until you set it, the home page shows your newest real report. Before the first 
 | Step | Model | Where |
 |---|---|---|
 | Read site, find competitors, write 20 questions | `DESIGN_MODEL` (strong) | `src/lib/ai.ts` designScan |
-| Answer each question, web search on, 2 runs | each app's default model | askAssistant |
+| Reword each question 2 more ways | `ANALYSIS_MODEL` (cheap) | rewordQuestions |
+| Answer each wording, web search on (3 per question) | each app's default model | askAssistant |
 | Brand mentions and order | plain code | `src/lib/detect.ts` |
 | Sentiment and wrong claims | `ANALYSIS_MODEL` (cheap) | analyseAnswer |
 | Fix list | `DESIGN_MODEL` | writeFixes |
+
+Assistants: ChatGPT and Claude by default. To add Gemini later, turn on Google billing, add the key and set `ASSISTANTS=chatgpt,claude,gemini`.
 
 The browser runs the 120 jobs 6 at a time through `/api/scans/[id]/ask`, so no single request hits Vercel's time limit.
 
