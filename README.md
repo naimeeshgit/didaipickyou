@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Did AI Pick You?
 
-## Getting Started
+Asks ChatGPT, Claude and Gemini the questions your buyers ask, and shows how often they recommend you, who they pick instead, which sources they cite, wrong facts about you, and what to fix.
 
-First, run the development server:
+## Run locally
 
 ```bash
+npm install
+cp .env.example .env.local   # keys optional
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+With no keys it runs in **sample mode**: a made-up brand (Quillnote) with made-up answers, so you can click through the whole flow for free.
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Push this folder to a new GitHub repo.
+2. vercel.com → Add New Project → import the repo. Framework: Next.js (auto).
+3. Storage tab → add **Neon Postgres**. It sets `DATABASE_URL` for you. Tables are created on first use.
+4. Settings → Environment Variables: add the keys from `.env.example`. Never paste keys anywhere else.
+5. Deploy. Then set `NEXT_PUBLIC_SITE_URL` to the live URL and redeploy.
+6. Google Search Console → add the site → submit `/sitemap.xml`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Before real scans
+
+- **Spend limits.** Set a monthly limit on each provider account (OpenAI, Anthropic, Google AI Studio) and keep auto-recharge off.
+- **Anthropic web search** must be turned on in the Anthropic Console (Settings → Privacy / tools) or Claude answers will fail.
+- **Check model IDs.** Defaults are in `src/lib/config.ts`. Set the env overrides to match what each consumer app currently uses.
+- Rough cost: $1–4 per scan (120 answers with web search). Daily cap (`DAILY_SCAN_CAP`) and per-visitor cap stop runaway bills.
+
+## Everstage case study on the home page
+
+1. Open `/scan`, enter `everstage.com`, review the questions, run it.
+2. Copy the report id from the URL (`/r/<id>`).
+3. Set `FEATURED_SCAN_ID=<id>` in Vercel and redeploy.
+
+## How it works
+
+| Step | Model | Where |
+|---|---|---|
+| Read site, find competitors, write 20 questions | `DESIGN_MODEL` (strong) | `src/lib/ai.ts` designScan |
+| Answer each question, web search on, 2 runs | each app's default model | askAssistant |
+| Brand mentions and order | plain code | `src/lib/detect.ts` |
+| Sentiment and wrong claims | `ANALYSIS_MODEL` (cheap) | analyseAnswer |
+| Fix list | `DESIGN_MODEL` | writeFixes |
+
+The browser runs the 120 jobs 6 at a time through `/api/scans/[id]/ask`, so no single request hits Vercel's time limit.
+
+**Cache:** site reads 24h, question sets 7 days, answers per ISO week (same question in the same week costs nothing), analysis 30 days.
+
+**Public reports:** every real scan gets a page at `/r/<id>` with its own title and description, listed in the sitemap, so brand names can show up on Google.
+
+## Safety
+
+- Site reader blocks private/local addresses and limits redirects.
+- Website text and AI answers are treated as data inside prompts, never as instructions.
+- Visitor IPs are stored only as salted hashes.
+
+## Later (parking lot)
+
+Accounts, payments, scheduled weekly re-runs with trend charts, Perplexity as a 4th assistant.
