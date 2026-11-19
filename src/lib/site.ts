@@ -58,6 +58,16 @@ export interface SiteSnapshot {
   text: string;
 }
 
+/** The site exists but would not give us its page (bot protection, timeout, JS-only page). */
+export class SiteUnreadable extends Error {}
+
+const BROWSER_HEADERS = {
+  "user-agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "accept-language": "en-US,en;q=0.9",
+};
+
 /** Reads a website's home page. Cached for 24 hours. */
 export async function readSite(input: string): Promise<SiteSnapshot> {
   let url = normaliseUrl(input);
@@ -68,11 +78,11 @@ export async function readSite(input: string): Promise<SiteSnapshot> {
   let res: Response | null = null;
   for (let hop = 0; hop < 4; hop++) {
     await assertPublicHost(url.hostname);
-    res = await fetch(url, {
-      redirect: "manual",
-      signal: AbortSignal.timeout(10_000),
-      headers: { "user-agent": "DidAIPickYou/1.0 (+site reader)", accept: "text/html" },
-    });
+    try {
+      res = await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(10_000), headers: BROWSER_HEADERS });
+    } catch {
+      throw new SiteUnreadable("The website didn't respond.");
+    }
     const next = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && next) {
       url = new URL(next, url);
@@ -80,10 +90,11 @@ export async function readSite(input: string): Promise<SiteSnapshot> {
     }
     break;
   }
-  if (!res || !res.ok) throw new Error(`Couldn't read that website (status ${res?.status ?? "unknown"}).`);
+  if (!res || !res.ok) throw new SiteUnreadable(`The website blocked our reader (status ${res?.status ?? "unknown"}).`);
 
   const raw = (await res.text()).slice(0, 1_500_000);
   const { title, description, text } = htmlToText(raw);
+  if (text.length < 300) throw new SiteUnreadable("The page has almost no readable text.");
   const snapshot = { url: url.toString(), title, description, text: text.slice(0, 8000) };
   await db.cacheSet(key, snapshot, 24 * 3600);
   return snapshot;

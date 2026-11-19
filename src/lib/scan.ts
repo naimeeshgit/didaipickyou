@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { analyseAnswer, askAssistant, designScan, rewordQuestions, writeFixes } from "./ai";
+import { analyseAnswer, askAssistant, designScan, researchSite, rewordQuestions, writeFixes } from "./ai";
 import { activeTools, config, sampleMode, scanReady, TOOLS, type ToolId } from "./config";
 import { db, hash, isoWeek, newId } from "./db";
 import { newMeter } from "./cost";
 import { detectBrands } from "./detect";
 import { SAMPLE_DESIGN, sampleAnswer, sampleVariants } from "./sample";
 import { scoreScan, summaryForFixes } from "./score";
-import { domainOf, normaliseUrl, readSite } from "./site";
+import { domainOf, normaliseUrl, readSite, SiteUnreadable } from "./site";
 import type { AnswerRecord, Brand, Design, Fix, Question, Report } from "./types";
 
 export interface Scan {
@@ -45,7 +45,15 @@ export async function createDesign(input: { url: string; brand?: string; competi
   const cacheKey = `design:${hash(`${domainOf(url)}|${input.brand ?? ""}|${(input.competitors ?? []).join(",")}|${config.questionsPerScan}`)}`;
   const cached = await db.cacheGet<Omit<Design, "id">>(cacheKey);
   const meter = newMeter();
-  const body = cached ?? { url: url.toString(), domain: domainOf(url), ...(await designScan(await readSite(url.toString()), input, meter)) };
+  let body = cached;
+  if (!body) {
+    // Some sites block automated readers (e.g. bot protection). Fall back to learning about them from web search.
+    const site = await readSite(url.toString()).catch((e) => {
+      if (e instanceof SiteUnreadable) return researchSite(url.toString(), input.brand, meter);
+      throw e;
+    });
+    body = { url: url.toString(), domain: domainOf(url), ...(await designScan(site, input, meter)) };
+  }
   if (!cached) await db.cacheSet(cacheKey, body, 7 * 24 * 3600);
   const design: Design = { id, ...body, cost: cached ? 0 : meter.usd };
   await db.putDoc("designs", id, design);
