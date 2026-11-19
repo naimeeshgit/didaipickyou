@@ -18,12 +18,12 @@ export const config = {
   // Models that answer the buyer questions. Set each to the model the
   // consumer app serves by default, so the scan measures what buyers see.
   answerModels: {
-    chatgpt: env("OPENAI_ANSWER_MODEL", "gpt-6-astra"),
-    claude: env("ANTHROPIC_ANSWER_MODEL", "claude-sonnet-5-5"),
+    chatgpt: env("OPENAI_ANSWER_MODEL", "gpt-5.4-mini"),
+    claude: env("ANTHROPIC_ANSWER_MODEL", "claude-haiku-5-5"),
     gemini: env("GOOGLE_ANSWER_MODEL", "gemini-4-argon"),
   } as Record<ToolId, string>,
   // Strong model: reads the website, designs questions, writes the fix list.
-  designModel: env("DESIGN_MODEL", "claude-opus-5-5"),
+  designModel: env("DESIGN_MODEL", "claude-sonnet-5-5"),
   // Cheap model: sentiment and claim checks on each answer.
   analysisModel: env("ANALYSIS_MODEL", "claude-haiku-5-5"),
 

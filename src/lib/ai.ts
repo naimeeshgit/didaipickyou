@@ -86,21 +86,21 @@ Tasks:
 
 export async function askAssistant(tool: ToolId, question: string) {
   const modelId = config.answerModels[tool];
-  const common = { prompt: question, stopWhen: isStepCount(6), maxOutputTokens: 1500, maxRetries: 4 };
+  const common = { prompt: question, stopWhen: isStepCount(3), maxOutputTokens: 900, maxRetries: 3 };
 
   const result =
     tool === "chatgpt"
       ? await generateText({
           model: openai(modelId),
           ...common,
-          tools: config.webSearch ? { web_search: openai.tools.webSearch({}) } : undefined,
+          tools: config.webSearch ? { web_search: openai.tools.webSearch({ searchContextSize: "low" }) } : undefined,
         })
       : tool === "claude"
         ? await generateText({
             model: anthropic(modelId),
             ...common,
             tools: config.webSearch
-              ? { web_search: anthropic.tools.webSearch_20260318({ maxUses: 3 }) }
+              ? { web_search: anthropic.tools.webSearch_20260318({ maxUses: 1 }) }
               : undefined,
           })
         : await generateText({
