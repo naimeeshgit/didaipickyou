@@ -229,7 +229,7 @@ export function ScanFlow() {
 
           <div className="flex items-center justify-between">
             <button type="button" onClick={() => setStep("input")} className="text-sm text-muted hover:text-ink">← Start over</button>
-            <button onClick={runScan} disabled={!brand.name.trim() || questions.length < 3}
+            <button onClick={runScan} disabled={!brand.name.trim() || questions.length < 1}
               className="rounded-full bg-ink text-paper px-6 py-3 font-medium hover:bg-accent disabled:opacity-40">
               Ask the assistants
             </button>

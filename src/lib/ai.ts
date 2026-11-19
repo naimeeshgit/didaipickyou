@@ -54,12 +54,12 @@ export async function designScan(
   meter?: Meter,
 ): Promise<Omit<Design, "id" | "url" | "domain">> {
   const n = config.questionsPerScan;
-  const mix = {
-    category: Math.round(n * 0.3),
-    problem: Math.round(n * 0.3),
-    comparison: Math.round(n * 0.25),
-  };
-  const feature = n - mix.category - mix.problem - mix.comparison;
+  // Small scans (under 4 questions) take one of each type in this order: category, comparison, problem, feature.
+  const mix =
+    n < 4
+      ? { category: n >= 1 ? 1 : 0, problem: n >= 3 ? 1 : 0, comparison: n >= 2 ? 1 : 0 }
+      : { category: Math.round(n * 0.3), problem: Math.round(n * 0.3), comparison: Math.round(n * 0.25) };
+  const feature = Math.max(0, n - mix.category - mix.problem - mix.comparison);
 
   const designRes = await generateText({
     model: anthropic(config.designModel),

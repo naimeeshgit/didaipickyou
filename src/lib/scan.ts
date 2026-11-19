@@ -73,7 +73,7 @@ export const startSchema = z.object({
   competitors: z.array(brandSchema).min(1).max(6),
   questions: z
     .array(z.object({ text: z.string().trim().min(5).max(220), type: z.enum(["category", "problem", "comparison", "feature"]) }))
-    .min(3)
+    .min(1)
     .max(config.questionsPerScan),
 });
 
