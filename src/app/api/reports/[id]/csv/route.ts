@@ -13,7 +13,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const label = (t: string) => TOOLS.find((x) => x.id === t)?.label ?? t;
   const rows: unknown[][] = [
-    ["question", "type", "assistant", "wording", "asked_as", "model", `named_${r.brand.name}`, "position", "brands_named", "sentiment", "sources", "error", "answer"],
+    ["question", "type", "assistant", "wording", "asked_as", "model", `named_${r.brand.name}`, "position", "brands_named", "sentiment", "sources", "cost_usd", "error", "answer"],
   ];
   for (const a of r.answers) {
     const q = r.questions[a.q];
@@ -22,7 +22,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       q?.text, q?.type, label(a.tool), a.run + 1, a.asked ?? q?.text, a.model,
       a.error ? "" : mine ? "yes" : "no", mine?.position ?? "",
       a.hits.map((h) => h.name).join("; "), a.analysis.targetSentiment,
-      a.sources.map((s) => s.url).join(" "), a.error ?? "", a.text,
+      a.sources.map((s) => s.url).join(" "), a.cost != null ? a.cost.toFixed(4) : "", a.error ?? "", a.text,
     ]);
   }
   const csv = "﻿" + rows.map((row) => row.map(cell).join(",")).join("\r\n");

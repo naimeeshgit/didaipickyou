@@ -26,6 +26,8 @@ export interface Design {
   questions: Question[];
   facts: string[];
   sample?: boolean;
+  /** AI cost (USD) of reading the site and writing the questions; 0 when served from cache. */
+  cost?: number;
 }
 
 export interface Source {
@@ -55,6 +57,8 @@ export interface AnswerRecord {
   sources: Source[];
   hits: BrandHit[];
   analysis: AnswerAnalysis;
+  /** Estimated AI cost (USD) of this answer and its analysis; 0 when cached. */
+  cost?: number;
   /** The exact wording sent for this run. */
   asked?: string;
   error?: string;
@@ -102,4 +106,6 @@ export interface Report {
   flaggedClaims: { claim: string; tool: ToolId; q: number }[];
   fixes: Fix[];
   answers: AnswerRecord[];
+  /** Estimated AI cost of this scan in USD (from token counts and searches). */
+  cost?: { total: number; answers: number; other: number };
 }

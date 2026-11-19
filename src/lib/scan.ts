@@ -2,6 +2,7 @@ import { z } from "zod";
 import { analyseAnswer, askAssistant, designScan, rewordQuestions, writeFixes } from "./ai";
 import { activeTools, config, sampleMode, scanReady, TOOLS, type ToolId } from "./config";
 import { db, hash, isoWeek, newId } from "./db";
+import { newMeter } from "./cost";
 import { detectBrands } from "./detect";
 import { SAMPLE_DESIGN, sampleAnswer, sampleVariants } from "./sample";
 import { scoreScan, summaryForFixes } from "./score";
@@ -21,6 +22,8 @@ export interface Scan {
   facts: string[];
   questions: Question[];
   runs: number;
+  /** AI cost of design + rewording (USD). */
+  setupCost?: number;
   /** Assistants asked in this scan. Older scans without it asked every tool. */
   tools?: ToolId[];
   models: Partial<Record<ToolId, string>>;
@@ -41,9 +44,10 @@ export async function createDesign(input: { url: string; brand?: string; competi
   }
   const cacheKey = `design:${hash(`${domainOf(url)}|${input.brand ?? ""}|${(input.competitors ?? []).join(",")}|${config.questionsPerScan}`)}`;
   const cached = await db.cacheGet<Omit<Design, "id">>(cacheKey);
-  const body = cached ?? { url: url.toString(), domain: domainOf(url), ...(await designScan(await readSite(url.toString()), input)) };
+  const meter = newMeter();
+  const body = cached ?? { url: url.toString(), domain: domainOf(url), ...(await designScan(await readSite(url.toString()), input, meter)) };
   if (!cached) await db.cacheSet(cacheKey, body, 7 * 24 * 3600);
-  const design: Design = { id, ...body };
+  const design: Design = { id, ...body, cost: cached ? 0 : meter.usd };
   await db.putDoc("designs", id, design);
   return design;
 }
@@ -71,13 +75,14 @@ export async function startScan(input: z.infer<typeof startSchema>): Promise<Sca
   const runs = config.runsPerQuestion;
   const texts = input.questions.map((q) => q.text);
   let variants: string[][];
+  const setupMeter = newMeter();
   if (design.sample) variants = texts.map(sampleVariants);
   else {
     // Reworded questions are cached, so re-running the same scan reuses the same wordings (and cached answers).
     const vKey = `vars:${hash(`${texts.join("|")}|${runs}`)}`;
     variants = (await db.cacheGet<string[][]>(vKey)) ?? [];
     if (variants.length !== texts.length) {
-      variants = await rewordQuestions(texts, runs - 1).catch(() => texts.map(() => []));
+      variants = await rewordQuestions(texts, runs - 1, setupMeter).catch(() => texts.map(() => []));
       await db.cacheSet(vKey, variants, 7 * 24 * 3600);
     }
   }
@@ -96,6 +101,7 @@ export async function startScan(input: z.infer<typeof startSchema>): Promise<Sca
     questions: input.questions.map((q, i) => ({ ...q, variants: variants[i] ?? [] })),
     runs,
     tools,
+    setupCost: (design.cost ?? 0) + setupMeter.usd,
     models: Object.fromEntries(tools.map((t) => [t, design.sample ? "sample" : config.answerModels[t]])),
   };
   await db.putDoc("scans", scan.id, scan, { brand: scan.brand.name });
@@ -131,7 +137,7 @@ export async function runJob(scanId: string, q: number, tool: ToolId, run: numbe
     } else {
       // Answers are cached for the current week only, so each weekly scan gets fresh answers.
       const key = `ans:${hash(`${tool}|${scan.models[tool]}|${question}|${run}|${isoWeek()}`)}`;
-      let answer = await db.cacheGet<{ text: string; sources: AnswerRecord["sources"]; model: string }>(key);
+      let answer = await db.cacheGet<{ text: string; sources: AnswerRecord["sources"]; model: string; cost?: number }>(key);
       const cached = Boolean(answer);
       if (!answer) {
         answer = await askAssistant(tool, question);
@@ -139,14 +145,15 @@ export async function runJob(scanId: string, q: number, tool: ToolId, run: numbe
       }
       const hits = detectBrands(answer.text, brands);
       const aKey = `ana:${hash(`${answer.text}|${scan.brand.name}|${brands.map((b) => b.name).join(",")}`)}`;
+      const anaMeter = newMeter();
       let analysis = await db.cacheGet<AnswerRecord["analysis"]>(aKey);
       if (!analysis) {
         analysis = hits.some((h) => h.name === scan.brand.name)
-          ? await analyseAnswer(answer.text, scan.brand, brands, scan.facts)
+          ? await analyseAnswer(answer.text, scan.brand, brands, scan.facts, anaMeter)
           : { targetSentiment: "not_mentioned", targetRecommended: false, topPick: hits[0]?.name ?? null, claims: [] };
         await db.cacheSet(aKey, analysis, 30 * 24 * 3600);
       }
-      record = { q, tool, run, asked: question, model: answer.model, text: answer.text, sources: answer.sources, hits, analysis, cached };
+      record = { q, tool, run, asked: question, cost: (cached ? 0 : answer.cost ?? 0) + anaMeter.usd, model: answer.model, text: answer.text, sources: answer.sources, hits, analysis, cached };
     }
   } catch (e) {
     console.error(`[ask] ${tool} q${q} run${run} failed:`, e);
@@ -232,13 +239,18 @@ export async function finishScan(scanId: string): Promise<Report> {
   scored.failedAnswers += jobsFor(scan).length - answers.length;
   scored.totalAnswers = jobsFor(scan).length;
 
+  const fixMeter = newMeter();
   let fixes: Fix[];
   try {
-    fixes = scan.sample ? sampleFixes(scored) : await writeFixes(summaryForFixes(scored), scan.brand.name);
+    fixes = scan.sample ? sampleFixes(scored) : await writeFixes(summaryForFixes(scored), scan.brand.name, fixMeter);
   } catch {
     fixes = sampleFixes(scored);
   }
-  const report: Report = { ...scored, fixes };
+  const answerCost = answers.reduce((t, a) => t + (a.cost ?? 0), 0);
+  const otherCost = (scan.setupCost ?? 0) + fixMeter.usd;
+  const cost = { total: answerCost + otherCost, answers: answerCost, other: otherCost };
+  console.log(`[scan ${scanId}] ${scan.brand.name}: estimated AI cost $${cost.total.toFixed(2)} (answers $${answerCost.toFixed(2)}, setup+fixes $${otherCost.toFixed(2)})`);
+  const report: Report = { ...scored, fixes, cost };
   await db.putDoc("reports", scanId, report, { brand: scan.brand.name, is_public: !scan.sample });
   return report;
 }

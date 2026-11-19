@@ -1,4 +1,5 @@
 import { TOOLS, toolNames, type ToolId } from "@/lib/config";
+import { fmtUsd } from "@/lib/cost";
 import type { Report } from "@/lib/types";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -247,6 +248,7 @@ export function ReportView({ report }: { report: Report }) {
         Method: each question was sent to the {Object.entries(report.models).map(([t, m]) => `${toolLabel(t as ToolId)} (${m})`).join(", ")} APIs
         {report.sample ? "" : " with web search on"}. Brand mentions are counted in code; sentiment and claims are judged by a small AI
         model. API answers can differ from what people see in the consumer apps, so read these numbers as a trend.
+        {report.cost && ` Estimated AI cost of this scan: ${fmtUsd(report.cost.total)}.`}
       </p>
     </div>
   );
