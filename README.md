@@ -10,7 +10,7 @@ cp .env.example .env.local   # keys optional
 npm run dev
 ```
 
-With no keys it runs in **sample mode**: a made-up brand (Quillnote) with made-up answers, so you can click through the whole flow for free.
+With no keys it runs in **sample mode** on your laptop only: a made-up brand (Quillnote) with made-up answers, so you can click through the flow for free. Sample mode never runs on the live site; there a missing key shows "Scanning isn't switched on yet".
 
 ## Deploy on Vercel
 
@@ -33,6 +33,8 @@ With no keys it runs in **sample mode**: a made-up brand (Quillnote) with made-u
 1. Open `/scan`, enter `everstage.com`, review the questions, run it.
 2. Copy the report id from the URL (`/r/<id>`).
 3. Set `FEATURED_SCAN_ID=<id>` in Vercel and redeploy.
+
+Until you set it, the home page shows your newest real report. Before the first real scan it shows no report at all.
 
 ## How it works
 

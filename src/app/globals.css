@@ -20,3 +20,10 @@ body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
 .tabular { font-variant-numeric: tabular-nums; }
 details > summary { list-style: none; cursor: pointer; }
 details > summary::-webkit-details-marker { display: none; }
+
+@media print {
+  header, footer, .no-print { display: none !important; }
+  body { background: white; }
+  .rounded-3xl, .rounded-2xl { break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

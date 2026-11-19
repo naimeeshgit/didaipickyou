@@ -23,7 +23,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="whitespace-nowrap">Did AI Pick You?</span>
             </Link>
             <nav className="flex items-center gap-5 text-sm text-muted">
-              <Link href="/r/sample" className="hover:text-ink hidden sm:inline">Sample report</Link>
               <Link href="/how-it-works" className="hover:text-ink hidden sm:inline">How it works</Link>
               <Link href="/scan" className="rounded-full bg-ink text-paper px-4 py-1.5 hover:bg-accent">Check my brand</Link>
             </nav>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { analyseAnswer, askAssistant, designScan, writeFixes } from "./ai";
-import { config, sampleMode, TOOLS, type ToolId } from "./config";
+import { allKeysSet, config, sampleMode, TOOLS, type ToolId } from "./config";
 import { db, hash, isoWeek, newId } from "./db";
 import { detectBrands } from "./detect";
 import { SAMPLE_DESIGN, sampleAnswer } from "./sample";
@@ -29,6 +29,7 @@ export interface Scan {
 export async function createDesign(input: { url: string; brand?: string; competitors?: string[] }): Promise<Design> {
   const url = normaliseUrl(input.url);
   const id = newId();
+  if (!sampleMode && !allKeysSet) throw new Error("Scanning isn't switched on yet. Please try again later.");
   if (sampleMode) {
     const design: Design = { id, url: url.toString(), domain: domainOf(url), ...SAMPLE_DESIGN };
     await db.putDoc("designs", id, design);
@@ -128,6 +129,7 @@ export async function runJob(scanId: string, q: number, tool: ToolId, run: numbe
       record = { q, tool, run, model: answer.model, text: answer.text, sources: answer.sources, hits, analysis, cached };
     }
   } catch (e) {
+    console.error(`[ask] ${tool} q${q} run${run} failed:`, e);
     record = {
       q, tool, run, model: scan.models[tool], text: "", sources: [], hits: [],
       analysis: { targetSentiment: "not_mentioned", targetRecommended: false, topPick: null, claims: [] },

@@ -44,7 +44,11 @@ export const hasKeys = {
   gemini: Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY),
 };
 
-/** Sample mode: no API keys set. Everything runs on labelled, made-up data. */
+export const allKeysSet = hasKeys.chatgpt && hasKeys.claude && hasKeys.gemini;
+
+/**
+ * Sample mode (made-up data) is for local testing only. It never runs on the live site:
+ * in production a missing key is an error, not a reason to show fake results.
+ */
 export const sampleMode =
-  process.env.SAMPLE_MODE === "on" ||
-  !(hasKeys.chatgpt && hasKeys.claude && hasKeys.gemini);
+  process.env.NODE_ENV !== "production" && (process.env.SAMPLE_MODE === "on" || !allKeysSet);

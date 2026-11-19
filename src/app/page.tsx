@@ -2,7 +2,6 @@ import Link from "next/link";
 import { UrlForm } from "@/components/UrlForm";
 import { config, sampleMode } from "@/lib/config";
 import { db } from "@/lib/db";
-import { buildSampleReport } from "@/lib/scan";
 import type { Report } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +14,7 @@ function CaseStudy({ report }: { report: Report }) {
     <Link href={`/r/${report.scanId}`} className="block rounded-3xl border border-line bg-white p-6 md:p-8 hover:border-accent transition">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm text-muted">
-          {report.sample ? "Sample report · made-up brands" : "Case study"} · {report.category}
+          Case study · {report.category}
         </p>
         <span className="text-sm text-accent">Read the full report →</span>
       </div>
@@ -38,9 +37,11 @@ function CaseStudy({ report }: { report: Report }) {
 }
 
 export default async function Home() {
-  const featured = config.featuredScanId ? await db.getDoc<Report>("reports", config.featuredScanId) : null;
-  const showcase = featured ?? buildSampleReport();
-  const recent = (await db.listPublicReports(6)).filter((r) => r.id !== config.featuredScanId);
+  const list = await db.listPublicReports(7);
+  const featuredId = config.featuredScanId || list[0]?.id;
+  const featured = featuredId ? await db.getDoc<Report>("reports", featuredId) : null;
+  const showcase = featured && !featured.sample ? featured : null;
+  const recent = list.filter((r) => r.id !== featuredId).slice(0, 6);
 
   return (
     <div>
@@ -58,13 +59,15 @@ export default async function Home() {
         </div>
         <p className="mt-3 text-xs text-muted">
           {config.questionsPerScan} buyer questions · 3 assistants · {config.runsPerQuestion} runs each · about 2 minutes
-          {sampleMode ? " · running in sample mode with made-up data" : ""}
+          {sampleMode ? " · local test mode, made-up data" : ""}
         </p>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5">
-        <CaseStudy report={showcase} />
-      </section>
+      {showcase && (
+        <section className="mx-auto max-w-6xl px-5">
+          <CaseStudy report={showcase} />
+        </section>
+      )}
 
       <section className="mx-auto max-w-6xl px-5 mt-16 grid md:grid-cols-3 gap-5">
         {[

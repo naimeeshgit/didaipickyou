@@ -43,6 +43,7 @@ export function ScanFlow() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [states, setStates] = useState<Record<string, JobState>>({});
   const [runs, setRuns] = useState(2);
+  const [toolErrors, setToolErrors] = useState<Partial<Record<ToolId, string>>>({});
   const started = useRef(false);
 
   const runDesign = useCallback(async (target: string) => {
@@ -104,14 +105,18 @@ export function ScanFlow() {
         const key = `${j.q}:${j.tool}:${j.run}`;
         setStates((s) => ({ ...s, [key]: "asking" }));
         let result: JobState = "failed";
+        let lastError = "";
         for (let attempt = 0; attempt < 2 && result === "failed"; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 4000));
           try {
             const r = await post<{ error: string | null; hits: { name: string }[] }>(`/api/scans/${start.scanId}/ask`, j);
             if (!r.error) result = r.hits.some((h) => h.name === brand.name) ? "picked" : "missed";
-          } catch {
-            /* retry once */
+            else lastError = r.error;
+          } catch (e) {
+            lastError = e instanceof Error ? e.message : "Request failed";
           }
         }
+        if (result === "failed" && lastError) setToolErrors((t) => (t[j.tool] ? t : { ...t, [j.tool]: lastError }));
         setStates((s) => ({ ...s, [key]: result }));
       }
     };
@@ -245,6 +250,11 @@ export function ScanFlow() {
               <div className="text-xs text-muted">picked {brand.name} so far</div>
             </div>
           </div>
+          {Object.entries(toolErrors).map(([t, msg]) => (
+            <p key={t} className="mt-3 rounded-lg bg-miss-soft text-miss px-3 py-2 text-xs">
+              <strong>{TOOLS.find((x) => x.id === t)?.label} failed:</strong> {msg}
+            </p>
+          ))}
           <div className="mt-4 h-2 rounded-full bg-line/70 overflow-hidden">
             <div className="h-full bg-accent transition-all" style={{ width: `${jobs.length ? (doneCount / jobs.length) * 100 : 0}%` }} />
           </div>

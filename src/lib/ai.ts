@@ -86,7 +86,7 @@ Tasks:
 
 export async function askAssistant(tool: ToolId, question: string) {
   const modelId = config.answerModels[tool];
-  const common = { prompt: question, stopWhen: isStepCount(6), maxOutputTokens: 1500 };
+  const common = { prompt: question, stopWhen: isStepCount(6), maxOutputTokens: 1500, maxRetries: 4 };
 
   const result =
     tool === "chatgpt"
