@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ReportView } from "@/components/Report";
 import { ReportActions } from "@/components/ReportActions";
+import { db } from "@/lib/db";
 import { loadReport } from "@/lib/reports";
 
 const load = loadReport;
@@ -26,9 +27,17 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const report = await load(id);
   if (!report) notFound();
+  const others = report.sample || !report.domain ? [] : await db.listReportsForDomain(report.domain, 50).catch(() => []);
   return (
     <>
-      <div className="mx-auto max-w-6xl px-5 pt-8 no-print">
+      <div className="mx-auto max-w-6xl px-5 pt-8 no-print flex flex-wrap items-center justify-between gap-3">
+        {others.length > 1 ? (
+          <Link href={`/brand/${encodeURIComponent(report.domain)}`} className="text-sm text-muted hover:text-ink">
+            ← All {others.length} checks for {report.brand.name}
+          </Link>
+        ) : (
+          <Link href="/" className="text-sm text-muted hover:text-ink">← All brands</Link>
+        )}
         <ReportActions id={id} brand={report.brand.name} />
       </div>
       <ReportView report={report} />

@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { BrandCard } from "@/components/BrandCard";
 import { UrlForm } from "@/components/UrlForm";
+import { groupByBrand } from "@/lib/brands";
 import { activeTools, config, sampleMode, toolNames } from "@/lib/config";
 import { db } from "@/lib/db";
 import type { Report } from "@/lib/types";
@@ -37,11 +39,11 @@ function CaseStudy({ report }: { report: Report }) {
 }
 
 export default async function Home() {
-  const list = await db.listPublicReports(7);
+  const list = await db.listPublicReports(200).catch(() => []);
+  const brands = groupByBrand(list);
   const featuredId = config.featuredScanId || list[0]?.id;
   const featured = featuredId ? await db.getDoc<Report>("reports", featuredId) : null;
   const showcase = featured && !featured.sample ? featured : null;
-  const recent = list.filter((r) => r.id !== featuredId).slice(0, 6);
 
   return (
     <div>
@@ -63,6 +65,23 @@ export default async function Home() {
         </p>
       </section>
 
+      {brands.length > 0 && (
+        <section className="mx-auto max-w-6xl px-5 pb-14">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold">Brands already checked</h2>
+              <p className="text-sm text-muted mt-1">Open any report, or check your own brand above.</p>
+            </div>
+            <span className="text-sm text-muted">{brands.length} brand{brands.length > 1 ? "s" : ""}</span>
+          </div>
+          <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {brands.slice(0, 9).map((g) => (
+              <BrandCard key={g.key} g={g} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {showcase && (
         <section className="mx-auto max-w-6xl px-5">
           <CaseStudy report={showcase} />
@@ -83,20 +102,6 @@ export default async function Home() {
         ))}
       </section>
 
-      {recent.length > 0 && (
-        <section className="mx-auto max-w-6xl px-5 mt-16">
-          <h2 className="text-xl font-semibold">Recent public reports</h2>
-          <ul className="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {recent.map((r) => (
-              <li key={r.id}>
-                <Link href={`/r/${r.id}`} className="block rounded-xl border border-line bg-white px-4 py-3 hover:border-accent">
-                  Did AI pick {r.brand}?
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

@@ -11,12 +11,41 @@ type Row = Record<string, unknown>;
 interface Store {
   getDoc<T>(table: string, id: string): Promise<T | null>;
   putDoc(table: string, id: string, data: unknown, extra?: Row): Promise<void>;
-  listPublicReports(limit: number): Promise<{ id: string; brand: string; created_at: string }[]>;
+  listPublicReports(limit: number): Promise<PublicReport[]>;
+  listReportsForDomain(domain: string, limit: number): Promise<PublicReport[]>;
   cacheGet<T>(key: string): Promise<T | null>;
   cacheSet(key: string, value: unknown, ttlSeconds: number): Promise<void>;
   bumpUsage(day: string, who: string): Promise<{ mine: number; total: number }>;
   peekUsage(day: string, who: string): Promise<{ mine: number; total: number }>;
 }
+
+/** A light summary of a public report, for lists (no answer text). */
+export type PublicReport = {
+  id: string;
+  brand: string;
+  created_at: string;
+  domain: string;
+  category: string;
+  pickRate: number | null;
+};
+
+const summarise = (id: string, brand: string, created_at: string, data: unknown): PublicReport => {
+  const d = (data ?? {}) as { domain?: string; category?: string; scores?: { isTarget?: boolean; pickRate?: number }[] };
+  const t = d.scores?.find((x) => x.isTarget);
+  return { id, brand, created_at, domain: d.domain ?? "", category: d.category ?? "", pickRate: t?.pickRate ?? null };
+};
+
+const toSummary = (r: Row): PublicReport => ({
+  id: String(r.id),
+  brand: String(r.brand ?? ""),
+  created_at: new Date(r.created_at as string).toISOString(),
+  domain: String(r.domain ?? ""),
+  category: String(r.category ?? ""),
+  pickRate: r.pick == null ? null : Number(r.pick),
+});
+
+const SUMMARY_COLUMNS = `id, brand, created_at, data->>'domain' as domain, data->>'category' as category,
+  (jsonb_path_query_first(data, '$.scores[*] ? (@.isTarget == true).pickRate'))::text as pick`;
 
 const TABLES = ["designs", "scans", "answers", "reports"] as const;
 
@@ -24,7 +53,7 @@ class MemoryStore implements Store {
   private docs = new Map<string, unknown>();
   private cache = new Map<string, { v: unknown; exp: number }>();
   private usage = new Map<string, number>();
-  private publicIndex: { id: string; brand: string; created_at: string }[] = [];
+  private publicIndex: PublicReport[] = [];
 
   async getDoc<T>(table: string, id: string) {
     return (this.docs.get(`${table}:${id}`) as T) ?? null;
@@ -33,13 +62,16 @@ class MemoryStore implements Store {
     this.docs.set(`${table}:${id}`, data);
     if (table === "reports" && extra?.is_public) {
       this.publicIndex = [
-        { id, brand: String(extra.brand ?? ""), created_at: new Date().toISOString() },
+        summarise(id, String(extra.brand ?? ""), new Date().toISOString(), data),
         ...this.publicIndex.filter((r) => r.id !== id),
       ];
     }
   }
   async listPublicReports(limit: number) {
     return this.publicIndex.slice(0, limit);
+  }
+  async listReportsForDomain(domain: string, limit: number) {
+    return this.publicIndex.filter((r) => r.domain === domain).slice(0, limit);
   }
   async cacheGet<T>(key: string) {
     const hit = this.cache.get(key);
@@ -99,10 +131,19 @@ class PostgresStore implements Store {
   }
   async listPublicReports(limit: number) {
     await this.init();
-    return (await this.sql.query(
-      `select id, brand, created_at from reports where is_public order by created_at desc limit $1`,
+    const rows = (await this.sql.query(
+      `select ${SUMMARY_COLUMNS} from reports where is_public order by created_at desc limit $1`,
       [limit],
-    )) as { id: string; brand: string; created_at: string }[];
+    )) as Row[];
+    return rows.map(toSummary);
+  }
+  async listReportsForDomain(domain: string, limit: number) {
+    await this.init();
+    const rows = (await this.sql.query(
+      `select ${SUMMARY_COLUMNS} from reports where is_public and data->>'domain' = $1 order by created_at desc limit $2`,
+      [domain, limit],
+    )) as Row[];
+    return rows.map(toSummary);
   }
   async cacheGet<T>(key: string) {
     await this.init();
