@@ -120,7 +120,7 @@ export function ScanFlow() {
         setStates((s) => ({ ...s, [key]: result }));
       }
     };
-    await Promise.all(Array.from({ length: 6 }, worker));
+    await Promise.all(Array.from({ length: 10 }, worker)); // 10 at a time: faster, still under new-account rate limits
 
     setStep("finishing");
     try {
@@ -135,8 +135,12 @@ export function ScanFlow() {
   const usedTools = TOOLS.filter((t) => jobs.some((j) => j.tool === t.id));
   const values = Object.values(states);
   const doneCount = values.filter((v) => v === "picked" || v === "missed" || v === "failed").length;
-  const picked = values.filter((v) => v === "picked").length;
-  const answered = values.filter((v) => v === "picked" || v === "missed").length;
+  // Running score matches the report: comparison questions name the brand, so they don't count.
+  const freeValues = Object.entries(states)
+    .filter(([k]) => questions[Number(k.split(":")[0])]?.type !== "comparison")
+    .map(([, v]) => v);
+  const picked = freeValues.filter((v) => v === "picked").length;
+  const answered = freeValues.filter((v) => v === "picked" || v === "missed").length;
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-12">
@@ -248,7 +252,7 @@ export function ScanFlow() {
             </div>
             <div className="text-right">
               <div className="text-4xl font-semibold tabular">{answered ? Math.round((picked / answered) * 100) : 0}%</div>
-              <div className="text-xs text-muted">picked {brand.name} so far</div>
+              <div className="text-xs text-muted">brought up {brand.name} unprompted so far</div>
             </div>
           </div>
           {Object.entries(toolErrors).map(([t, msg]) => (

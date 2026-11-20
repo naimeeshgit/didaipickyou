@@ -37,7 +37,12 @@ export function ReportView({ report }: { report: Report }) {
   const rank = report.scores.findIndex((s) => s.isTarget) + 1;
   const leader = report.scores[0];
   const answered = report.totalAnswers - report.failedAnswers;
+  const base = report.unpromptedAnswers ?? answered; // older reports counted every answer
   const asked = toolNames(report.byTool.map((t) => t.tool));
+  // Differences this small are within run-to-run noise, so don't call a winner.
+  const close = Math.abs(leader.mentions - target.mentions) <= Math.max(2, Math.round(base * 0.08));
+  const topPick = target.topPickRate ?? target.firstRate;
+  const h2h = report.headToHead;
   const date = new Date(report.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
   return (
@@ -56,9 +61,12 @@ export function ReportView({ report }: { report: Report }) {
             Did AI pick {report.brand.name}?
           </h1>
           <p className="mt-4 text-paper/80 max-w-xl">
-            {target.pickRate >= leader.pickRate && target.isTarget
-              ? `Yes, more often than any competitor. ${asked} named ${report.brand.name} in ${pct(target.pickRate)} of ${answered} answers.`
-              : `Sometimes. ${asked} named ${report.brand.name} in ${pct(target.pickRate)} of ${answered} answers. ${leader.name} was named most, in ${pct(leader.pickRate)}.`}
+            When buyers asked without naming {report.brand.name}, {asked} brought it up in {target.mentions} of {base} answers ({pct(target.pickRate)}).{" "}
+            {leader.isTarget
+              ? "That's more than any competitor."
+              : close
+                ? `That's about level with ${leader.name} (${leader.mentions} of ${base}).`
+                : `${leader.name} came up most, in ${leader.mentions} of ${base} (${pct(leader.pickRate)}).`}
           </p>
           <p className="mt-3 text-xs text-paper/50">
             {report.domain} · {date} · {report.questions.length} buyer questions × {report.byTool.length} assistants × {report.runs} wordings
@@ -67,8 +75,8 @@ export function ReportView({ report }: { report: Report }) {
         </div>
         <div className="grid grid-cols-3 gap-3 text-center">
           {[
-            { label: "Pick rate", value: pct(target.pickRate) },
-            { label: "Named first", value: pct(target.firstRate) },
+            { label: "Brought up unprompted", value: pct(target.pickRate) },
+            { label: report.scores[0].topPickRate != null ? "AI's top pick" : "Named first", value: pct(topPick) },
             { label: `Rank of ${report.scores.length}`, value: `#${rank}` },
           ].map((m) => (
             <div key={m.label} className="rounded-2xl bg-paper/10 p-4">
@@ -80,13 +88,15 @@ export function ReportView({ report }: { report: Report }) {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <Section title="Who AI picks" note="Share of answers that name each brand.">
+        <Section title="Who AI picks" note={`Answers to the questions that didn't name ${report.brand.name} (${base} answers). Comparison questions are in Head-to-head below.`}>
           <div className="space-y-3">
             {report.scores.map((s) => (
-              <div key={s.name} className="grid grid-cols-[9rem_1fr_3.5rem] items-center gap-3 text-sm">
+              <div key={s.name} className="grid grid-cols-[9rem_1fr_6.5rem] items-center gap-3 text-sm">
                 <span className={`truncate ${s.isTarget ? "font-semibold text-accent" : ""}`}>{s.name}</span>
                 <Bar value={s.pickRate} strong={s.isTarget} />
-                <span className="tabular text-right">{pct(s.pickRate)}</span>
+                <span className="tabular text-right">
+                  {pct(s.pickRate)} <span className="text-muted text-xs">({s.mentions}/{base})</span>
+                </span>
               </div>
             ))}
           </div>
@@ -121,6 +131,25 @@ export function ReportView({ report }: { report: Report }) {
           </div>
         </Section>
       </div>
+
+      {h2h && h2h.answers > 0 && (
+        <Section
+          title="Head-to-head"
+          note={`Comparison questions ("${report.brand.name} vs X", "alternatives to X"): which vendor did AI recommend? ${h2h.answers} answers.`}
+        >
+          <div className="space-y-3">
+            {h2h.picks.map((p) => (
+              <div key={p.name} className="grid grid-cols-[9rem_1fr_6.5rem] items-center gap-3 text-sm">
+                <span className={`truncate ${p.name === report.brand.name ? "font-semibold text-accent" : ""}`}>{p.name}</span>
+                <Bar value={p.count / h2h.answers} strong={p.name === report.brand.name} />
+                <span className="tabular text-right">
+                  {pct(p.count / h2h.answers)} <span className="text-muted text-xs">({p.count}/{h2h.answers})</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section title="What to fix first" note="Actions based on this scan, most important first.">
         <ol className="grid md:grid-cols-2 gap-4">

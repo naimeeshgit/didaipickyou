@@ -79,6 +79,8 @@ export interface BrandScore {
   pickRate: number; // share of answers that name the brand (0-1)
   firstRate: number; // share of answers where it is named first
   shareOfVoice: number; // share of all brand mentions (0-1)
+  topPicks: number; // answers where AI's top recommendation is this brand
+  topPickRate: number; // topPicks / answers (0-1)
 }
 
 export interface Report {
@@ -96,7 +98,11 @@ export interface Report {
   runs: number;
   totalAnswers: number;
   failedAnswers: number;
+  /** Answers to questions that did NOT name the brand: the base for the headline numbers. */
+  unpromptedAnswers: number;
   scores: BrandScore[];
+  /** Questions that named the brand (comparisons): whose side AI takes. */
+  headToHead: { answers: number; picks: { name: string; count: number }[] };
   byTool: { tool: ToolId; pickRate: number; answers: number }[];
   byType: { type: QuestionType; pickRate: number; answers: number }[];
   consistency: number; // share of question+tool pairs where all runs agree on mentioning the target
