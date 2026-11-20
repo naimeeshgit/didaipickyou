@@ -116,6 +116,8 @@ export async function askAssistant(tool: ToolId, question: string) {
       ? await generateText({
           model: openai(modelId),
           ...common,
+          // Low effort keeps hidden reasoning (billed as output) small and leaves room for the answer.
+          providerOptions: { openai: { reasoningEffort: config.openaiReasoning } },
           tools: config.webSearch ? { web_search: openai.tools.webSearch({ searchContextSize: "low" }) } : undefined,
         })
       : tool === "claude"
