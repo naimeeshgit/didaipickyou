@@ -27,10 +27,9 @@ export const config = {
   // Cheap model: sentiment and claim checks on each answer.
   analysisModel: env("ANALYSIS_MODEL", "claude-haiku-5-5"),
 
-  // Kept small while testing; set SCAN_QUESTIONS=20 in Vercel for full scans.
-  questionsPerScan: Math.min(num("SCAN_QUESTIONS", 2), 30),
+  questionsPerScan: Math.min(num("SCAN_QUESTIONS", 20), 30),
   // Each run asks the same question in different words (run 1 = original wording).
-  runsPerQuestion: Math.min(num("SCAN_RUNS", 3), 3),
+  runsPerQuestion: Math.min(num("SCAN_RUNS", 2), 3),
   webSearch: env("ANSWER_WEB_SEARCH", "on") !== "off",
 
   freeScansPerIpPerDay: num("FREE_SCANS_PER_IP_PER_DAY", 2),
